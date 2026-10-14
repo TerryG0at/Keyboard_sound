@@ -55,7 +55,7 @@ The tests cover configuration loading/saving, supported audio formats, load erro
 Install dependencies first, then run:
 
 ```powershell
-pyinstaller --noconsole --onefile --name KeyboardSound --add-data "assets\shotgun.wav;assets" main.py
+python -m PyInstaller --noconsole --onefile --name KeyboardSound --icon assets/keyboard.ico --add-data "assets;assets" --hidden-import pynput.keyboard._win32 --hidden-import pystray._win32 main.py
 ```
 
 The executable will be created under:
@@ -64,4 +64,22 @@ The executable will be created under:
 dist\KeyboardSound.exe
 ```
 
-When packaging, keep the `--add-data` argument so the default placeholder sound is included in the bundled app.
+The EXE includes Python, its dependencies, and bundled WAV/MP3 sounds. Double-click it to open the app. An existing instance remains in the tray if the EXE is opened again.
+
+## Install And Start With Windows
+
+After building, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-windows.ps1
+```
+
+This installs the EXE to `%LOCALAPPDATA%\Programs\KeyboardSound`, creates a desktop shortcut, and creates a current-user Startup shortcut. It starts in the system tray at the next Windows sign-in, using your existing settings. No administrator access or Python installation is needed to run the EXE.
+
+To disable automatic startup, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-windows.ps1 -RemoveStartup
+```
+
+To update the installed app, exit it through the tray menu, rebuild, and run the installation script again.

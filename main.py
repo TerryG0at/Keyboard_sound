@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import argparse
+import os
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 from audio_manager import AudioManager
-from config_manager import AppConfig, ConfigManager
+from config_manager import AppConfig, ConfigManager, resource_path
 from gui import KeyboardSoundGUI
 from keyboard_listener import KeyboardListenerManager
 from tray_manager import TrayManager
+from windows_integration import SingleInstance
 
 
 class KeyboardSoundController:
@@ -27,15 +31,19 @@ class KeyboardSoundController:
         self.gui: KeyboardSoundGUI | None = None
         self.tray: TrayManager | None = None
 
-    def start(self) -> None:
+    def start(self, minimized: bool = False) -> None:
         self.audio.initialize()
         self.keyboard_listener.start()
 
         self.gui = KeyboardSoundGUI(self)
+        if minimized:
+            self.gui.hide_window()
         self.tray = TrayManager(self)
         self.tray.start()
 
         self.gui.refresh()
+        if minimized:
+            self.gui.root.after(500, self.hide_window)
         self.gui.run()
 
     def _handle_key_press(self) -> None:
@@ -129,9 +137,50 @@ class KeyboardSoundController:
             self.gui.destroy()
 
 
+def packaging_self_test() -> None:
+    os.environ["SDL_AUDIODRIVER"] = "dummy"
+    audio = AudioManager()
+    try:
+        if not audio.initialize():
+            raise RuntimeError(audio.last_error)
+        for name in ("shotgun.wav", "fahhh_KcgAXfs.mp3"):
+            if not audio.load_sound(str(resource_path(f"assets/{name}"))):
+                raise RuntimeError(audio.last_error)
+            if not audio.play():
+                raise RuntimeError(audio.last_error or "Packaged playback failed.")
+        controller = SimpleNamespace(
+            toggle_sound=lambda: None,
+            hide_window=lambda: None,
+            set_volume=lambda _volume: None,
+        )
+        gui = KeyboardSoundGUI(controller)
+        try:
+            gui.hide_window()
+            gui.root.update()
+            if TrayManager._create_icon().size != (64, 64):
+                raise RuntimeError("Packaged tray icon failed.")
+        finally:
+            gui.destroy()
+    finally:
+        audio.shutdown()
+
+
 def main() -> None:
-    app = KeyboardSoundController()
-    app.start()
+    parser = argparse.ArgumentParser(description="Keyboard Sound")
+    parser.add_argument("--tray", action="store_true", help="Start in the system tray")
+    parser.add_argument("--self-test", action="store_true", help="Check packaged runtime")
+    args = parser.parse_args()
+    if args.self_test:
+        packaging_self_test()
+        return
+    instance = SingleInstance()
+    if not instance.acquire():
+        return
+    try:
+        app = KeyboardSoundController()
+        app.start(minimized=args.tray)
+    finally:
+        instance.release()
 
 
 if __name__ == "__main__":
